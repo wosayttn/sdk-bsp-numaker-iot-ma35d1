@@ -14,7 +14,7 @@ board:
                   以最大限度地减少将常用传感器和模块连接到系统的工作量。
   emulator_machine: ''
   large_image: documents/images/large.png
-  name: NUMAKER-HMI-MA35D1
+  name: NUMAKER-IOT-MA35D1
   price_cn: 1389 CNY
   price_global: 199 USD
   sale_contact_cn: https://www.nuvoton.com
@@ -39,9 +39,37 @@ example_projects: []
 features:
 - 800MHz CPU frequency
 - 512MB DDR3L
+- One Gigabit Ethernet
+- One 10/100 Megabit Ethernet
+- Two High Speed USB HSUSB0 (Host/Device) and HSUSB1 (Host)
+- One Raspberry Pi 40-pin header connector
+- Arduino UNO Compatible Extension Connectors
+- One Camera Capture (CMOS sensor) header connector
+- One Audio codec (NAU88C22) with microphone input and speaker output
+- One set of RS232 Transceiver and header connector
+- One set of RS485 Transceiver and header connector
+- One set of CAN FD Transceiver and header connector
+- Four Key buttons
+- Three user defined LEDs
 features_zh:
 - 800MHz 主频
 - 512MB DDR3L
+- 系统启动根据开机设置拨码开关选择
+- SPI-NAND 闪存 (512 MB)
+- Raw NAND 闪存 (1 GB)
+- MicroSD 存储卡
+- 一个千兆以太网
+- 一个 10/100 兆以太网
+- 两个高速 USB HSUSB0(主机/设备) 和 HSUSB1 (主机)
+- 一组树莓派 40 针接头
+- Arduino UNO 兼容扩展连接器
+- 一个相机捕捉接头连接器
+- 一个带有麦克风输入和扬声器输出的音频编解码器
+- 一组 RS232 收发器和接头连接器
+- 一组 RS485 收发器和接头连接器
+- 一组 CAN FD 收发器和接头连接器
+- 四个按键
+- 三个用户自定义 LED
 pkg_type: Board_Support_Packages
 pkg_vendor: Nuvoton
 pkg_version: 1.0.0
@@ -63,9 +91,7 @@ template_projects:
     - ma35-rtp
     - preload
     - nuwriter_scripts
-    - CVD
     - README.md
-    - cconfig.h
     - rtconfig.h
     - SConscript
     - libraries
@@ -82,6 +108,6 @@ template_projects:
     target_path_offset: ''
     files_and_folders: []    
   project_description: ''
-  project_name: numaker-hmi-ma35d1
+  project_name: numaker-iot-ma35d1
   project_type: rt-thread|@full|@notUsed
 yaml_version: 3
