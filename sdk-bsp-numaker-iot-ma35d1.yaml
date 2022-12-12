@@ -1,0 +1,87 @@
+board:
+  buy_url_cn: https://direct.nuvoton.com/en/numaker-iot-ma35d1-a1
+  buy_url_global: https://direct.nuvoton.com/en/numaker-iot-ma35d1-a1
+  debug_interface: SWD
+  debugger: NU-LINK
+  description_en: The NuMaker-IoT-MA35D1-A1 evaluation board provides the Ethernet and connectivity features of Nuvoton NuMicro MA35D1 series microprocessors, 
+                  based on MA35D16F987C (LQFP216 package, and stacking a 512 MB DDR). The NuMaker-IoT-MA35D1-A1 includes rich peripherals such as one set of Gigabit Ethernet,
+                  one set of Megabit Ethernet, high-speed USB2.0 Host and device, one set of SD3.0 in MicroSD slot, one set of CAN FD, and RS-485 and RS232 serial communication ports.
+                  Furthermore, the NuMaker-IoT-MA35D1-A1 provides discrete power supply to be the reference design. It also provides compatible headers with Raspberry Pi and Arduino UNO for
+                  minimizing effort in connecting popular sensors and modules to the system. 
+  description_zh: NuMaker-IoT-MA35D1-A1 评估板提供基于 MA35D16F987C (LQFP216 封装，堆叠 512 MB DDR) 的 Nuvoton NuMicro MA35D1 系列微处理器的以太网和连接功能。
+                  NuMaker-IoT-MA35D1-A1 包含丰富的外围设备，例如一个千兆以太网、一个兆位以太网、高速 USB2.0 主机和设备、一个 SD3.0 MicroSD 卡槽、一个 CAN FD，
+                  以及 RS-485 和 RS232 串行通信端口。此外，NuMaker-IoT-MA35D1-A1 提供分立电源作为参考设计。它还提供与 Raspberry Pi 和 Arduino UNO 兼容的接头，
+                  以最大限度地减少将常用传感器和模块连接到系统的工作量。
+  emulator_machine: ''
+  large_image: documents/images/large.png
+  name: NUMAKER-HMI-MA35D1
+  price_cn: 1389 CNY
+  price_global: 199 USD
+  sale_contact_cn: https://www.nuvoton.com
+  sale_contact_global: https://www.nuvoton.com
+  small_image: documents/images/small.png
+  vendor: Nuvoton
+  version: v2.2
+chip:
+  chip_name: MA35D16F987C
+  clock_source: HXT
+  device_vendor: Nuvoton
+  family_name: NuMicro
+  rx_name: PB12
+  series_name: MA35D1
+  source_freq: '24000000'
+  sub_series_name: MA35D1
+  target_freq: '800000000'
+  tx_name: PB13
+  uart_name: UART0
+docs: []
+example_projects: []
+features:
+- 800MHz CPU frequency
+- 512MB DDR3L
+features_zh:
+- 800MHz 主频
+- 512MB DDR3L
+pkg_type: Board_Support_Packages
+pkg_vendor: Nuvoton
+pkg_version: 1.0.0
+template_projects:
+- builtin_files:
+  - files_and_folders:
+    - .settings
+    - .cproject
+    - .config
+    - .project
+    - SConstruct
+    - linking_scripts
+    - rtconfig_preinc.h
+    - Kconfig
+    - applications
+    - makefile.targets
+    - board
+    - rt-thread
+    - ma35-rtp
+    - preload
+    - nuwriter_scripts
+    - CVD
+    - README.md
+    - cconfig.h
+    - rtconfig.h
+    - SConscript
+    - libraries
+    - packages
+    - rtconfig.py
+    source_path_offset: project_0
+    target_path_offset: ''
+  external_files:
+  - package_type: ToolChain_Support_Packages
+    package_name: GNU_Tools_for_ARM_Embedded_Processors
+    package_vendor: 'ARM'
+    package_version: 10.2.1
+    source_path_offset: ''
+    target_path_offset: ''
+    files_and_folders: []    
+  project_description: ''
+  project_name: numaker-hmi-ma35d1
+  project_type: rt-thread|@full|@notUsed
+yaml_version: 3
