@@ -17,11 +17,11 @@
 #include "NuMicro.h"
 #include "interrupt.h"
 
-#if !defined(USE_MA35D1_SUBM)
+#if !defined(USE_MA35_RTP)
 
 #include "gic.h"
 #include "mmu.h"
-#if defined(USE_MA35D1_AARCH32)
+#if defined(USE_MA35_AARCH32)
     #include "cp15.h"
 #endif
 #include "gtimer.h"
@@ -51,9 +51,9 @@ rt_inline rt_uint32_t platform_get_gic_cpu_base(void)
 rt_inline rt_uint32_t nu_cpu_dcache_line_size(void)
 {
     rt_uint32_t ctr = 0;
-#if defined(USE_MA35D1_AARCH32)
+#if defined(USE_MA35_AARCH32)
     asm volatile("mrc p15, 0, %0, c0, c0, 1" : "=r"(ctr));
-#elif defined(USE_MA35D1_AARCH64)
+#elif defined(USE_MA35_AARCH64)
     asm volatile("mrs %0, ctr_el0" : "=r"(ctr));
 #endif
     return 4 << ((ctr >> 16) & 0xF);
@@ -61,6 +61,24 @@ rt_inline rt_uint32_t nu_cpu_dcache_line_size(void)
 extern void rt_hw_cpu_dcache_clean(void *addr, int size);
 extern void rt_hw_cpu_dcache_clean_inv(void *addr, int size);
 extern void rt_hw_cpu_dcache_invalidate(void *addr, int size);
+
+#define STR2(x) #x
+#define STR(x) STR2(x)
+#define INCBIN(name, file) \
+    __asm__(".section .rodata\n" \
+            ".global incbin_" STR(name) "_start\n" \
+            ".balign 16\n" \
+            "incbin_" STR(name) "_start:\n" \
+            ".incbin \"" file "\"\n" \
+            \
+            ".global incbin_" STR(name) "_end\n" \
+            ".balign 1\n" \
+            "incbin_" STR(name) "_end:\n" \
+            ".byte 0\n" \
+    ); \
+    extern const __attribute__((aligned(32))) void* incbin_ ## name ## _start; \
+    extern const void* incbin_ ## name ## _end; \
+
 #else
 #define UNCACHEABLE        0
 #endif

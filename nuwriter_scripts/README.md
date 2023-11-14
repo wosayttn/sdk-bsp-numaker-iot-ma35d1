@@ -35,21 +35,66 @@ NuWriter must install **WinUSB4NuVCOM.exe** on the computer.
 
 If your NuWriter_MA35 python running is ready, you can do following batch script files for Window directly.
 
-### **nuwriter_ddr2_128mb_download_and_run.bat** or **nuwriter_ddr3_512mb_download_and_run.bat**
+### **nuwriter_ddr_download_and_run.bat**
 
-Download rtthread.bin binary file into DDR. The address is 0x80400000.
+Download rtthread.bin binary file into DDR. The address is 0x80800000.
 
-### **nuwriter_sd_programming.bat**
+### **nuwriter_program_sd.bat**
 
-Program header, DDR timing setting and rtthread.bin binary file into SD card or EMMC.
+Program header0, DDR timing setting and rtthread.bin binary file into SD card or EMMC.
 
-### **nuwriter_spinand_programming.bat**
+### **nuwriter_program_spinand.bat**
 
-Program header, DDR timing setting and rtthread.bin binary file into SPI NAND flash.
+Program header0, DDR timing setting and rtthread.bin binary file into SPI NAND flash.
 
-### **nuwriter_nand_programming.bat**
+### **nuwriter_program_rawnand.bat**
 
-Program header, DDR timing setting and rtthread.bin binary file into NAND flash.
+Program header0, DDR timing setting and rtthread.bin binary file into NAND flash.
+
+### **nuwriter_program_sd_pack1.bat**
+
+Program header1, DDR timing setting and rtthread.bin binary file into SD card or EMMC.
+
+### **nuwriter_program_spinand_pack1.bat**
+
+Program header1, DDR timing setting and rtthread.bin binary file into SPI NAND flash.
+
+### **nuwriter_program_rawnand_pack1.bat**
+
+Program header1, DDR timing setting and rtthread.bin binary file into NAND flash.
+
+### **nuwriter_program_spinor_pack1.bat**
+
+Program header1, DDR timing setting and rtthread.bin binary file into SPI NOR flash.
+
+## **Bash Scripts for Linux**
+
+If your NuWriter_MA35 python running is ready, you can do following bash script files for Linux directly.
+If not, the **install_linux.sh** will help user to install related python module installation.
+
+```bash
+# ./install_linux.sh
+```
+
+### **nuwriter_ddr_download_and_run.sh**
+
+Download rtthread.bin binary file into DDR. The address is 0x80800000.
+
+### **nuwriter_program_sd.sh**
+
+Program header0, DDR timing setting and rtthread.bin binary file into SD card or EMMC.
+
+### **nuwriter_program_spinand.sh**
+
+Program header0, DDR timing setting and rtthread.bin binary file into SPI NAND flash.
+
+### **nuwriter_program_rawnand.sh**
+
+Program header0, DDR timing setting and rtthread.bin binary file into NAND flash.
+
+### **nuwriter_program_spinor.sh**
+
+Program header0, DDR timing setting and rtthread.bin binary file into SPI NOR flash.
 
 ## **Troubleshoot**
 
@@ -74,14 +119,15 @@ For example, the **nuwriter_ddr_download_and_run.bat** modification is as follow
 
 ```bash
 :forever_develop
-NuWriter_MA35.exe -a ddrimg\enc_ddr3_winbond_256mb.bin
+NuWriter_MA35.exe -a ddrimg\enc_ddr3_winbond_512mb.bin
 IF %ERRORLEVEL% EQU 0 (
-   NuWriter_MA35.exe -o execute -w ddr 0x80400000 ..\rtthread.bin
+   NuWriter_MA35.exe -o execute -w ddr 0x80800000 ..\rtthread.bin
 )
 pause
 goto :forever_develop
 ```
 
 ## **See also**
+[In-system Firmware Updating](In-system_firmware_updating.md)
 
 [NuWriter Repository](https://github.com/OpenNuvoton/MA35D1_NuWriter)

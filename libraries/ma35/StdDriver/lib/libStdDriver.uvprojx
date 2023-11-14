@@ -337,7 +337,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_MA35D1_SUBM</Define>
+              <Define>USE_MA35_RTP</Define>
               <Undefine></Undefine>
               <IncludePath>..\inc;..\..\CMSIS\Include;..\..\Device\Nuvoton\MA35D1\Include;.</IncludePath>
             </VariousControls>

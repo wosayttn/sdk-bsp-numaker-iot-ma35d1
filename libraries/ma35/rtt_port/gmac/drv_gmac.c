@@ -56,7 +56,9 @@ enum
     GMAC_CNT
 };
 
-#define invalidate_cpu_cache(addr, len)   rt_hw_cpu_dcache_invalidate(addr, len)
+#define invalidate_cpu_cache(addr, len)    rt_hw_cpu_dcache_invalidate(addr, len)
+#define flush_cpu_cache(addr, size)        rt_hw_cpu_dcache_clean(addr, size)
+#define cache_line_size()                  nu_cpu_dcache_line_size()
 
 /* Private typedef --------------------------------------------------------------*/
 
@@ -232,7 +234,7 @@ static void nu_gmac_isr(int irqno, void *param)
 
     /* DMA status */
     interrupt = synopGMAC_get_interrupt_type(gmacdev);
-    LOG_D("%s: 0x%08x@%08x\n", psNuGMAC->name, interrupt, DmaStatus);
+    //rt_kprintf("%s: 0x%08x@%08x\n", psNuGMAC->name, interrupt, dma_status_reg);
 
     if (interrupt & synopGMACDmaError)
     {
@@ -342,18 +344,28 @@ void nu_gmac_link_monitor(void *pvData)
     }
     else
     {
-        s32 data, speed;
-        data = synopGMAC_check_phy_init(adapter);
+        s32 data = synopGMAC_check_phy_init(adapter);
         if (gmacdev->LinkState != data)
         {
-            speed = data & 0x0f;
             gmacdev->LinkState = data;
             synopGMAC_mac_init(gmacdev);
-            synopGMAC_set_mode(gmacdev, speed);
+            LOG_I("Link is up in %s mode\n", (gmacdev->DuplexMode == FULLDUPLEX) ? "FULL DUPLEX" : "HALF DUPLEX");
+            if (gmacdev->Speed == SPEED1000)
+            {
+                LOG_I("Link is with 1000M Speed \r\n");
+                synopGMAC_set_mode(gmacdev, 0);
+            }
+            if (gmacdev->Speed == SPEED100)
+            {
+                LOG_I("Link is with 100M Speed \n");
+                synopGMAC_set_mode(gmacdev, 1);
+            }
+            if (gmacdev->Speed == SPEED10)
+            {
+                LOG_I("Link is with 10M Speed \n");
+                synopGMAC_set_mode(gmacdev, 2);
+            }
             eth_device_linkchange(&psNuGMAC->eth, RT_TRUE);
-            LOG_I("%s: Link is up in %s %s mode", psNuGMAC->name,  \
-                  (speed == SPEED1000) ? "1000M" : (speed == SPEED100) ? "100M" : (speed == SPEED10) ? "10M" : "",
-                  (gmacdev->DuplexMode == FULLDUPLEX) ? "FULL DUPLEX" : "HALF DUPLEX");
         }
     }
     NU_GMAC_TRACE("%s: Interrupt enable: %08x, status:%08x\n", psNuGMAC->name, synopGMAC_get_ie(gmacdev), synopGMACReadReg(gmacdev->DmaBase, DmaStatus));
@@ -361,24 +373,39 @@ void nu_gmac_link_monitor(void *pvData)
     NU_GMAC_TRACE("%s: debug:%08x\n", psNuGMAC->name, synopGMACReadReg(gmacdev->MacBase, GmacDebug));
 }
 
+#ifndef CACHE_ON
+    __attribute__((section(".noncacheable"))) __attribute__((aligned(64))) DmaDesc sTXDescs[TRANSMIT_DESC_SIZE];
+    __attribute__((section(".noncacheable"))) __attribute__((aligned(64))) DmaDesc sRXDescs[RECEIVE_DESC_SIZE];
+#endif
+
 static void nu_memmgr_init(GMAC_MEMMGR_T *psMemMgr)
 {
     psMemMgr->u32TxDescSize = TRANSMIT_DESC_SIZE;
     psMemMgr->u32RxDescSize = RECEIVE_DESC_SIZE;
 
-    psMemMgr->psTXDescs = (DmaDesc *) rt_malloc_align(sizeof(DmaDesc) * psMemMgr->u32TxDescSize, nu_cpu_dcache_line_size());
+#ifdef CACHE_ON
+    psMemMgr->psTXDescs = (DmaDesc *) rt_malloc_align(sizeof(DmaDesc) * psMemMgr->u32TxDescSize, cache_line_size());
     RT_ASSERT(psMemMgr->psTXDescs);
     LOG_D("[%s] First TXDescAddr= %08x", __func__, psMemMgr->psTXDescs);
+    invalidate_cpu_cache(psMemMgr->psTXDescs, sizeof(DmaDesc) * psMemMgr->u32TxDescSize);
 
-    psMemMgr->psRXDescs = (DmaDesc *) rt_malloc_align(sizeof(DmaDesc) * psMemMgr->u32RxDescSize, nu_cpu_dcache_line_size());
+    psMemMgr->psRXDescs = (DmaDesc *) rt_malloc_align(sizeof(DmaDesc) * psMemMgr->u32RxDescSize, cache_line_size());
     RT_ASSERT(psMemMgr->psRXDescs);
     LOG_D("[%s] First RXDescAddr= %08x", __func__, psMemMgr->psRXDescs);
+    invalidate_cpu_cache(psMemMgr->psRXDescs, sizeof(DmaDesc) * psMemMgr->u32RxDescSize);
+#else
+    psMemMgr->psTXDescs = (DmaDesc *) &sTXDescs[0];
+    LOG_D("[%s] First TXDescAddr= %08x", __func__, psMemMgr->psTXDescs);
 
-    psMemMgr->psTXFrames = (PKT_FRAME_T *) rt_malloc_align(sizeof(PKT_FRAME_T) * psMemMgr->u32TxDescSize, nu_cpu_dcache_line_size());
+    psMemMgr->psRXDescs = (DmaDesc *) &sRXDescs[0];
+    LOG_D("[%s] First RXDescAddr= %08x", __func__, psMemMgr->psRXDescs);
+#endif
+
+    psMemMgr->psTXFrames = (PKT_FRAME_T *) rt_malloc_align(sizeof(PKT_FRAME_T) * psMemMgr->u32TxDescSize, cache_line_size());
     RT_ASSERT(psMemMgr->psTXFrames);
     LOG_D("[%s] First TXFrameAddr= %08x", __func__, psMemMgr->psTXFrames);
 
-    psMemMgr->psRXFrames = (PKT_FRAME_T *) rt_malloc_align(sizeof(PKT_FRAME_T) * psMemMgr->u32RxDescSize, nu_cpu_dcache_line_size());
+    psMemMgr->psRXFrames = (PKT_FRAME_T *) rt_malloc_align(sizeof(PKT_FRAME_T) * psMemMgr->u32RxDescSize, cache_line_size());
     RT_ASSERT(psMemMgr->psRXFrames);
     LOG_D("[%s] First RXFrameAddr= %08x", __func__, psMemMgr->psRXFrames);
 }
@@ -449,6 +476,7 @@ static rt_err_t nu_gmac_init(rt_device_t device)
     //synopGMAC_promisc_enable(gmacdev);
 
     synopGMAC_pause_control(gmacdev); // This enables the pause control in Full duplex mode of operation
+    //synopGMAC_jumbo_frame_enable(gmacdev); // enable jumbo frame
 
 #if defined(RT_LWIP_USING_HW_CHECKSUM)
     /*IPC Checksum offloading is enabled for this driver. Should only be used if Full Ip checksumm offload engine is configured in the hardware*/
@@ -482,6 +510,7 @@ static rt_err_t nu_gmac_init(rt_device_t device)
 
     synopGMAC_set_mac_addr(gmacdev, GmacAddr0High, GmacAddr0Low, &psNuGMAC->mac_addr[0]);
 
+    synopGMAC_set_mode(gmacdev, 0);
     LOG_D("Create %s link monitor timer.", psNuGMAC->name);
     /* Create timer to monitor link status. */
     psNuGMAC->link_timer = rt_timer_create("link_timer",
@@ -549,59 +578,42 @@ static rt_err_t nu_gmac_control(rt_device_t device, int cmd, void *args)
 rt_err_t nu_gmac_tx(rt_device_t device, struct pbuf *p)
 {
     rt_err_t ret = -RT_ERROR;
-    s32 status;
 
     nu_gmac_t psNuGMAC = (nu_gmac_t)device;
-    synopGMACNetworkAdapter *adapter;
-    synopGMACdevice *gmacdev;
-    GMAC_MEMMGR_T *psgmacmemmgr;
+    synopGMACNetworkAdapter *adapter = (synopGMACNetworkAdapter *) psNuGMAC->adapter;
+    synopGMACdevice *gmacdev = (synopGMACdevice *) adapter->m_gmacdev;
+    GMAC_MEMMGR_T *psgmacmemmgr = (GMAC_MEMMGR_T *)adapter->m_gmacmemmgr;
 
-    RT_ASSERT(device);
+    u32 index = gmacdev->TxNext;
+    u8 *pu8PktData = (u8 *)((u32)&psgmacmemmgr->psTXFrames[index]);
+    struct pbuf *q;
+    rt_uint32_t offset = 0;
+    u32 offload_needed;
+    s32 status;
 
-    adapter = (synopGMACNetworkAdapter *) psNuGMAC->adapter;
-    RT_ASSERT(adapter);
+    LOG_D("%s: Transmitting data(%08x-%d).\n", psNuGMAC->name, (u32)pu8PktData, p->tot_len);
 
-    gmacdev = (synopGMACdevice *) adapter->m_gmacdev;
-    RT_ASSERT(gmacdev);
-
-    psgmacmemmgr = (GMAC_MEMMGR_T *)adapter->m_gmacmemmgr;
-    RT_ASSERT(psgmacmemmgr);
-
-    if (!synopGMAC_is_desc_owned_by_dma(gmacdev->TxNextDesc))
+    /* Copy to TX data buffer. */
+    for (q = p; q != NULL; q = q->next)
     {
-        u32 offload_needed;
-#if defined(RT_LWIP_USING_HW_CHECKSUM)
-        offload_needed = 1;
-#else
-        offload_needed = 0;
-#endif
-        u32 index = gmacdev->TxNext;
-        u8 *pu8PktData = (u8 *)((u32)&psgmacmemmgr->psTXFrames[index] | UNCACHEABLE);
-        struct pbuf *q;
-        rt_uint32_t offset = 0;
-
-        LOG_D("%s: Transmitting data(%08x-%d).\n", psNuGMAC->name, (u32)&psgmacmemmgr->psTXFrames[index], p->tot_len);
-
-        /* Copy to TX data buffer. */
-        for (q = p; q != NULL; q = q->next)
-        {
-            rt_uint8_t *ptr = q->payload;
-            rt_uint32_t len = q->len;
-            rt_memcpy(&pu8PktData[offset], ptr, len);
-            offset += len;
-        }
-
-        status = synopGMAC_xmit_frames(gmacdev, (u8 *)&psgmacmemmgr->psTXFrames[index], offset, offload_needed, 0);
-        if (status != 0)
-        {
-            LOG_E("%s No More Free Tx skb\n", __func__);
-            ret = -RT_ERROR;
-            goto exit_nu_gmac_tx;
-        }
+        rt_uint8_t *ptr = q->payload;
+        rt_uint32_t len = q->len;
+        memcpy(&pu8PktData[offset], ptr, len);
+        offset += len;
     }
-    else
+
+    flush_cpu_cache(pu8PktData, offset);
+
+#if defined(RT_LWIP_USING_HW_CHECKSUM)
+    offload_needed = 1;
+#else
+    offload_needed = 0;
+#endif
+
+    status = synopGMAC_xmit_frames(gmacdev, (u8 *)pu8PktData, offset, offload_needed, 0);
+    if (status != 0)
     {
-        LOG_E("No avaialbe TX descriptor.\n");
+        LOG_E("%s No More Free Tx skb\n", __func__);
         ret = -RT_ERROR;
         goto exit_nu_gmac_tx;
     }
@@ -618,13 +630,17 @@ void nu_gmac_pbuf_free(struct pbuf *p)
     nu_gmac_lwip_pbuf_t my_buf = (nu_gmac_lwip_pbuf_t)p;
     s32 status;
 
+    while (1)
+    {
+        status = synopGMAC_set_rx_qptr(my_buf->gmacdev, (u32)my_buf->psPktFrameDataBuf, PKT_FRAME_BUF_SIZE, 0);
+        if (status >= 0)
+        {
+            break;
+        }
+    }
+
     SYS_ARCH_DECL_PROTECT(old_level);
     SYS_ARCH_PROTECT(old_level);
-    status = synopGMAC_set_rx_qptr(my_buf->gmacdev, (u32)my_buf->psPktFrameDataBuf, PKT_FRAME_BUF_SIZE, 0);
-    if (status < 0)
-    {
-        LOG_E("synopGMAC_set_rx_qptr: status < 0!!\n");
-    }
     memp_free_pool(my_buf->pool, my_buf);
     SYS_ARCH_UNPROTECT(old_level);
 }
@@ -646,7 +662,8 @@ struct pbuf *nu_gmac_rx(rt_device_t device)
     gmacdev = (synopGMACdevice *) adapter->m_gmacdev;
     RT_ASSERT(gmacdev);
 
-    if ((s32PktLen = synop_handle_received_data(gmacdev, &psPktFrame)) > 0)
+    s32PktLen = synop_handle_received_data(gmacdev, &psPktFrame);
+    if (s32PktLen > 0)
     {
         nu_gmac_lwip_pbuf_t my_pbuf  = (nu_gmac_lwip_pbuf_t)memp_malloc_pool(psNuGMAC->memp_rx_pool);
         if (my_pbuf != RT_NULL)
@@ -685,24 +702,47 @@ exit_nu_gmac_rx:
 
 static void nu_gmac_assign_macaddr(nu_gmac_t psNuGMAC)
 {
-    static rt_uint32_t value = 0x94539452;
+    if ((psNuGMAC->base == GMAC0) && (SYS->MACAD0LSR != 0))
+    {
+        psNuGMAC->mac_addr[0] = (SYS->MACAD0LSR >> 0)  & 0xFF;
+        psNuGMAC->mac_addr[1] = (SYS->MACAD0LSR >> 8)  & 0xFF;
+        psNuGMAC->mac_addr[2] = (SYS->MACAD0LSR >> 16) & 0xFF;
+        psNuGMAC->mac_addr[3] = (SYS->MACAD0LSR >> 24) & 0xFF;
+        psNuGMAC->mac_addr[4] = (SYS->MACAD0HSR >> 0)  & 0xFF;
+        psNuGMAC->mac_addr[5] = (SYS->MACAD0HSR >> 8)  & 0xFF;
+    }
+    else if ((psNuGMAC->base == GMAC1) && (SYS->MACAD1LSR != 0))
+    {
+        psNuGMAC->mac_addr[0] = (SYS->MACAD1LSR >> 0)  & 0xFF;
+        psNuGMAC->mac_addr[1] = (SYS->MACAD1LSR >> 8)  & 0xFF;
+        psNuGMAC->mac_addr[2] = (SYS->MACAD1LSR >> 16) & 0xFF;
+        psNuGMAC->mac_addr[3] = (SYS->MACAD1LSR >> 24) & 0xFF;
+        psNuGMAC->mac_addr[4] = (SYS->MACAD1HSR >> 0)  & 0xFF;
+        psNuGMAC->mac_addr[5] = (SYS->MACAD1HSR >> 8)  & 0xFF;
+    }
+    else
+    {
+        static uint32_t seed_value = 0x94539452;
 
-    /* Assign MAC address */
-    psNuGMAC->mac_addr[0] = 0x82;
-    psNuGMAC->mac_addr[1] = 0x06;
-    psNuGMAC->mac_addr[2] = 0x21;
-    psNuGMAC->mac_addr[3] = (value >> 16) & 0xff;
-    psNuGMAC->mac_addr[4] = (value >> 8) & 0xff;
-    psNuGMAC->mac_addr[5] = (value) & 0xff;
+        /* Assign MAC address */
+        psNuGMAC->mac_addr[0] = 0x82;
+        psNuGMAC->mac_addr[1] = 0x06;
+        psNuGMAC->mac_addr[2] = 0x21;
+        psNuGMAC->mac_addr[3] = (seed_value >> 16) & 0xff;
+        psNuGMAC->mac_addr[4] = (seed_value >> 8) & 0xff;
+        psNuGMAC->mac_addr[5] = (seed_value) & 0xff;
 
-    LOG_I("MAC address: %02X:%02X:%02X:%02X:%02X:%02X\n", \
+        seed_value++;
+    }
+
+    LOG_I("[%s] MAC address: %02X:%02X:%02X:%02X:%02X:%02X\n", \
+          psNuGMAC->name,
           psNuGMAC->mac_addr[0], \
           psNuGMAC->mac_addr[1], \
           psNuGMAC->mac_addr[2], \
           psNuGMAC->mac_addr[3], \
           psNuGMAC->mac_addr[4], \
           psNuGMAC->mac_addr[5]);
-    value++;
 }
 
 int32_t nu_gmac_adapter_init(nu_gmac_t psNuGMAC)
@@ -712,17 +752,17 @@ int32_t nu_gmac_adapter_init(nu_gmac_t psNuGMAC)
     RT_ASSERT(psNuGMAC);
 
     /* Allocate net adapter */
-    adapter = (synopGMACNetworkAdapter *)rt_malloc_align(sizeof(synopGMACNetworkAdapter), nu_cpu_dcache_line_size());
+    adapter = (synopGMACNetworkAdapter *)rt_malloc_align(sizeof(synopGMACNetworkAdapter), cache_line_size());
     RT_ASSERT(adapter);
     rt_memset((void *)adapter, 0, sizeof(synopGMACNetworkAdapter));
 
     /* Allocate device */
-    adapter->m_gmacdev = (synopGMACdevice *) rt_malloc_align(sizeof(synopGMACdevice), nu_cpu_dcache_line_size());
+    adapter->m_gmacdev = (synopGMACdevice *) rt_malloc_align(sizeof(synopGMACdevice), cache_line_size());
     RT_ASSERT(adapter->m_gmacdev);
     rt_memset((char *)adapter->m_gmacdev, 0, sizeof(synopGMACdevice));
 
     /* Allocate memory management */
-    adapter->m_gmacmemmgr = (GMAC_MEMMGR_T *) rt_malloc_align(sizeof(GMAC_MEMMGR_T), nu_cpu_dcache_line_size());
+    adapter->m_gmacmemmgr = (GMAC_MEMMGR_T *) rt_malloc_align(sizeof(GMAC_MEMMGR_T), cache_line_size());
     RT_ASSERT(adapter->m_gmacmemmgr);
     nu_memmgr_init(adapter->m_gmacmemmgr);
 
@@ -770,11 +810,11 @@ int rt_hw_gmac_init(void)
 
     return 0;
 }
-INIT_APP_EXPORT(rt_hw_gmac_init);
+INIT_DEVICE_EXPORT(rt_hw_gmac_init);
 
 #if 0
 /*
-    Remeber src += lwipiperf_SRCS in components\net\lwip-*\SConscript
+    Remeber src += lwipiperf_SRCS in components\net\lwip\lwip-*\SConscript
 */
 #include "lwip/apps/lwiperf.h"
 
@@ -791,11 +831,14 @@ lwiperf_report(void *arg, enum lwiperf_report_type report_type,
                (int)report_type, ipaddr_ntoa(remote_addr), (int)remote_port, bytes_transferred, ms_duration, bandwidth_kbitpsec);
 }
 
-void lwiperf_example_init(void)
+int lwiperf_example_init(void)
 {
     lwiperf_start_tcp_server_default(lwiperf_report, NULL);
+
+    return 0;
 }
 MSH_CMD_EXPORT(lwiperf_example_init, start lwip tcp server);
+INIT_APP_EXPORT(lwiperf_example_init);
 #endif
 
 #endif /* if defined(BSP_USING_GMAC) */

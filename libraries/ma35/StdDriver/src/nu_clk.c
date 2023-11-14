@@ -67,7 +67,7 @@ void CLK_EnableCKO(uint32_t u32ClkSrc, uint32_t u32ClkDiv, uint32_t u32ClkDivBy1
     CLK_SetModuleClock(CLKO_MODULE, u32ClkSrc, 0UL);
 }
 
-#if defined(USE_MA35D1_SUBM)
+#if defined(USE_MA35_RTP)
 /**
   * @brief      Enter to Power-down mode
   * @param      None
@@ -105,11 +105,6 @@ void CLK_Idle(void)
 
     /* Chip enter idle mode after CPU run WFI instruction */
     __WFI();
-}
-#else
-void SystemCoreClockUpdate(void)
-{
-
 }
 #endif
 
@@ -865,7 +860,7 @@ uint32_t CLK_WaitClockReady(uint32_t u32ClkMask)
     return u32Ret;
 }
 
-#if defined(USE_MA35D1_SUBM)
+#if defined(USE_MA35_RTP)
 /**
   * @brief      Enable System Tick counter
   * @param[in]  u32ClkSrc is System Tick clock source. Including:
@@ -1367,6 +1362,8 @@ static const struct S_PLL_FREQ_MAP s_au32CAPLLMap[] =
     { 1000000000u, PLL_OPMODE_INTEGER, 0x000006FA, 0, 0 },  /* 1000 MHz */
     {  800000000u, PLL_OPMODE_INTEGER, 0x00000364, 0, 0 },  /*  800 MHz */
     {  700000000u, PLL_OPMODE_INTEGER, 0x000006AF, 0, 0 },  /*  700 MHz */
+    {  648000000u, PLL_OPMODE_INTEGER, 0x000006A2, 0, 0 },  /*  648 MHz */
+    {  600000000u, PLL_OPMODE_INTEGER, 0x00000696, 0, 0 }   /*  600 MHz */
 };
 #define ARRARSIZE_CAPLLPLLMAP  (sizeof(s_au32CAPLLMap)/sizeof(struct S_PLL_FREQ_MAP))
 

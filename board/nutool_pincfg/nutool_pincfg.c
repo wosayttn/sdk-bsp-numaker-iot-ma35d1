@@ -428,7 +428,7 @@ void nutool_pincfg_init(void)
     nutool_pincfg_init_i2c2();
     nutool_pincfg_init_i2c4();
     nutool_pincfg_init_i2c5();
-    nutool_pincfg_init_i2s0();
+    //nutool_pincfg_init_i2s0();
     nutool_pincfg_init_nand();
     nutool_pincfg_init_qspi0();
     nutool_pincfg_init_rgmii0();

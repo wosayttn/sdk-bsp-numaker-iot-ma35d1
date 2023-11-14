@@ -1,12 +1,19 @@
 .section ".text.entrypoint"
-.globl system_vectors
+.global _start
+.global system_vectors
 
 ma35d1_start:
     .word    0x10000014
     .word    0x9100029f
+    .word    0xd5384240
+    .word    0xd342fc00
+    .word    0x92400400
+    .word    0xf1000c1f
+    .word    0x54000be1
     .word    0xd539f220
     .word    0xb27a0000
     .word    0xd519f220
+    .word    0xd5033fdf
     .word    0xd53800a1
     .word    0x92400421
     .word    0xb4000141
@@ -94,16 +101,57 @@ ma35d1_start:
     .word    0xb27a0000
     .word    0xb27c0000
     .word    0xd51e4000
-    .word    0x10000060
+    .word    0x10000400
     .word    0xd51e4020
+    .word    0xd69f03e0
+    .word    0xd53ce100
+    .word    0xb2400400
+    .word    0xd51ce100
+    .word    0xd51ce07f
+    .word    0xd5380000
+    .word    0xd53800a1
+    .word    0xd51c0000
+    .word    0xd51c00a1
+    .word    0xd2867fe0
+    .word    0xd51c1140
+    .word    0xd51c117f
+    .word    0xd2a00600
+    .word    0xd5181040
+    .word    0xd2800000
+    .word    0xb2630000
+    .word    0xd51c1100
+    .word    0xd53c1100
+    .word    0xd2810000
+    .word    0xf2a61a00
+    .word    0xd5181000
+    .word    0x910003e0
+    .word    0xd51c4100
+    .word    0xd53cc000
+    .word    0xd518c000
+    .word    0xd2803a60
+    .word    0xd51c4000
+    .word    0x10000060
+    .word    0xd51c4020
     .word    0xd69f03e0
 
 .L__aarch32_code:
 
-    nop
-    nop
-    nop
-    nop
-    ldr     r0, =ma35d1_start
-    mov     sp, r0
-    ldr     pc, =system_vectors
+    mov     r0,  #0
+    mov     r1,  #0
+    mov     r2,  #0
+    mov     r3,  #0
+    mov     r4,  #0
+    mov     r5,  #0
+    mov     r6,  #0
+    mov     r7,  #0
+    mov     r8,  #0
+    mov     r9,  #0
+    mov     r10, #0
+    mov     r11, #0
+    mov     r12, #0
+    mcr     p15, 0, r0, c1, c0, 0
+    isb
+    vmrs    r1, FPEXC
+    orr     r1, r1, #(1 << 30)
+    vmsr    FPEXC, r1
+    bl      system_vectors

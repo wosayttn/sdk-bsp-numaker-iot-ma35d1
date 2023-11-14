@@ -18,9 +18,10 @@
 #include "NuMicro.h"
 #include "ccap_sensor.h"
 #include "drv_ccap.h"
+#include "drv_common.h"
 
 #define LOG_TAG    "drv.ccap"
-#define DBG_ENABLE
+//#undef DBG_ENABLE
 #define DBG_SECTION_NAME   LOG_TAG
 #define DBG_LEVEL   LOG_LVL_INFO
 #define DBG_COLOR
@@ -89,6 +90,18 @@ static void nu_ccap_isr(int vector, void *param)
     {
         base->INT |= CCAP_INT_VINTF_Msk;     /* Clear Frame end interrupt */
         u32EvtMsk |= NU_CCAP_FRAME_END;
+
+        if (ccap->sConfig.sPipeInfo_Packet.pu8FarmAddr)
+        {
+            rt_hw_cpu_dcache_invalidate((void *)ccap->sConfig.sPipeInfo_Packet.pu8FarmAddr,
+                                        (ccap->sConfig.u32Stride_Packet * ccap->sConfig.sPipeInfo_Packet.u32Height));
+        }
+
+        if (ccap->sConfig.sPipeInfo_Planar.pu8FarmAddr)
+        {
+            rt_hw_cpu_dcache_invalidate((void *)ccap->sConfig.sPipeInfo_Planar.pu8FarmAddr,
+                                        (ccap->sConfig.u32Stride_Planar * ccap->sConfig.sPipeInfo_Planar.u32Height));
+        }
     }
 
     if ((u32CapInt & (CCAP_INT_ADDRMIEN_Msk | CCAP_INT_ADDRMINTF_Msk)) == (CCAP_INT_ADDRMIEN_Msk | CCAP_INT_ADDRMINTF_Msk))
@@ -109,6 +122,7 @@ static void nu_ccap_isr(int vector, void *param)
 
     if (ccap->sConfig.pfnEvHndler && u32EvtMsk)
         ccap->sConfig.pfnEvHndler(ccap->sConfig.pvData, u32EvtMsk);
+
 
     base->CTL = base->CTL | CCAP_CTL_UPDATE;
 }
@@ -398,23 +412,109 @@ static rt_err_t ccap_control(rt_device_t dev, int cmd, void *args)
 
     case CCAP_CMD_SET_BASEADDR:
     {
-        uint32_t u32Offset = 0;
         ccap_config_t psCcapConf;
 
         RT_ASSERT(args);
         psCcapConf = (ccap_config_t)args;
 
         /* Set System Memory Packet Base Address Register */
-        CCAP_SetPacketBuf(psNuCcap->base, (uint32_t)psCcapConf->sPipeInfo_Packet.pu8FarmAddr);
+        if ((uint32_t)psCcapConf->sPipeInfo_Packet.pu8FarmAddr != 0)
+        {
+            CCAP_SetPacketBuf(psNuCcap->base, (uint32_t)psCcapConf->sPipeInfo_Packet.pu8FarmAddr);
+        }
+        else
+        {
+            CCAP_CLR_CTL(psNuCcap->base, CCAP_CTL_PKTEN_Msk);
+        }
 
-        /* Set System Memory Planar Y Base Address Register */
-        CCAP_SetPlanarYBuf(psNuCcap->base, (uint32_t)psCcapConf->sPipeInfo_Planar.pu8FarmAddr + u32Offset);
-        u32Offset = psCcapConf->sPipeInfo_Planar.u32Height * psCcapConf->sPipeInfo_Planar.u32Width;
-        /* Set System Memory Planar U Base Address Register */
-        CCAP_SetPlanarUBuf(psNuCcap->base, (uint32_t)psCcapConf->sPipeInfo_Planar.pu8FarmAddr + u32Offset);
-        u32Offset += ((psCcapConf->sPipeInfo_Planar.u32Height * psCcapConf->sPipeInfo_Planar.u32Width) / 2);
-        /* Set System Memory Planar V Base Address Register */
-        CCAP_SetPlanarVBuf(psNuCcap->base, (uint32_t)psCcapConf->sPipeInfo_Planar.pu8FarmAddr + u32Offset);
+        if ((uint32_t)psCcapConf->sPipeInfo_Planar.pu8FarmAddr != 0)
+        {
+            uint32_t u32Div = 0, u32Offset = 0;
+
+            if (psCcapConf->sPipeInfo_Planar.u32PixFmt  == CCAP_PAR_PLNFMT_YUV422)
+            {
+                /* U/V farm size equals Y/2 farm size */
+                u32Div = 2;
+            }
+            else if (psCcapConf->sPipeInfo_Planar.u32PixFmt  == CCAP_PAR_PLNFMT_YUV420)
+            {
+                /* U/V farm size equals Y/4 farm size */
+                u32Div = 4;
+            }
+            else
+            {
+                RT_ASSERT(0);
+            }
+
+            /* Set System Memory Planar Y Base Address Register */
+            CCAP_SetPlanarYBuf(psNuCcap->base, (uint32_t)psCcapConf->sPipeInfo_Planar.pu8FarmAddr + u32Offset);
+            u32Offset = psCcapConf->sPipeInfo_Planar.u32Height * psCcapConf->sPipeInfo_Planar.u32Width;
+            /* Set System Memory Planar U Base Address Register */
+            CCAP_SetPlanarUBuf(psNuCcap->base, (uint32_t)psCcapConf->sPipeInfo_Planar.pu8FarmAddr + u32Offset);
+            u32Offset += ((psCcapConf->sPipeInfo_Planar.u32Height * psCcapConf->sPipeInfo_Planar.u32Width) / u32Div);
+            /* Set System Memory Planar V Base Address Register */
+            CCAP_SetPlanarVBuf(psNuCcap->base, (uint32_t)psCcapConf->sPipeInfo_Planar.pu8FarmAddr + u32Offset);
+        }
+        else
+        {
+            CCAP_CLR_CTL(psNuCcap->base, CCAP_CTL_PLNEN_Msk);
+        }
+
+    }
+    break;
+
+    case CCAP_CMD_BINARIZATION_FLUSH:
+    {
+        ccap_bin_config_t psBinConf;
+        ccap_view_info_t psSrcView, psDstView;
+
+        RT_ASSERT(args);
+
+        psBinConf = (ccap_bin_config_t)args;
+        psSrcView = &psBinConf->sPipeInfo_Src;
+        psDstView = &psBinConf->sPipeInfo_Dst;
+
+        if (psSrcView->pu8FarmAddr && psDstView->pu8FarmAddr)
+        {
+            int x, y, w, h, dst_byte;
+            uint16_t *pu16BVFarmAddr; // Binarization view farm address
+            uint8_t  *pu8BVFarmAddr; // Binarization view farm address
+            uint8_t  *pu8YFarmAddr;
+
+            w = psSrcView->u32Width;
+            h = psSrcView->u32Height;
+            pu8YFarmAddr   = (uint8_t *)psSrcView->pu8FarmAddr;
+            pu16BVFarmAddr = (uint16_t *)psDstView->pu8FarmAddr;
+            pu8BVFarmAddr  = (uint8_t *)psDstView->pu8FarmAddr;
+
+            dst_byte = (psDstView->u32PixFmt == CCAP_PAR_OUTFMT_ONLY_Y) ? 1 : 2;
+
+            for (y = 0; y < h; y++)
+            {
+                rt_hw_cpu_dcache_invalidate(&pu8YFarmAddr[y * w], w);
+                for (x = 0; x < w; x++)
+                {
+                    if (dst_byte == 2)
+                        pu16BVFarmAddr[y * w + x] = (pu8YFarmAddr[y * w + x] > (psBinConf->u32Threshold & 0xFF)) ? 0xFFFF : 0x0000;
+                    else if (dst_byte == 1)
+                        pu8BVFarmAddr[y * w + x] = (pu8YFarmAddr[y * w + x] > (psBinConf->u32Threshold & 0xFF)) ? 0xFF : 0x00;
+                }
+                rt_hw_cpu_dcache_clean(pu16BVFarmAddr, w * dst_byte);
+                if (dst_byte == 2)
+                    pu16BVFarmAddr += (psBinConf->u32Stride_Dst - w);
+                else if (dst_byte == 1)
+                    pu8BVFarmAddr += (psBinConf->u32Stride_Dst - w);
+            }
+        }
+    }
+    break;
+
+    case CCAP_CMD_SET_FRAMERATE_NM:
+    {
+        uint32_t u32N = (((uint32_t)args >> 16) & 0x3F);
+        uint32_t u32M = (((uint32_t)args >> 0) & 0x3F);
+
+        CCAP_SET_FR(psNuCcap->base, u32N, u32M);
     }
     break;
 

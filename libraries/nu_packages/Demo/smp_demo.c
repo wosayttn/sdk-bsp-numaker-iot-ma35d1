@@ -19,7 +19,7 @@
 #define DEF_COUNTER_ADDR_RTP  (3*1024*1024)
 #define DEF_COUNTER_ADDR_A35  ((0x80000000+DEF_COUNTER_ADDR_RTP)|UNCACHEABLE)
 
-#if defined(USE_MA35D1_SUBM)
+#if defined(USE_MA35_RTP)
     #define DEF_COUNTER_ADDR   DEF_COUNTER_ADDR_RTP
 #else
     #define DEF_COUNTER_ADDR   DEF_COUNTER_ADDR_A35
@@ -60,7 +60,7 @@ void happy_memcpy(void *pdata)
     now = rt_tick_get();
     while (counter < DEF_TIMES)
     {
-        rt_memcpy(dstbuf, srcbuf, DEF_BUF_SIZE);
+        memcpy(dstbuf, srcbuf, DEF_BUF_SIZE);
         counter++;
     }
     last = rt_tick_get();

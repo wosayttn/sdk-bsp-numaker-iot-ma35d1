@@ -23,7 +23,11 @@
 #include <rtdbg.h>
 
 #define DEF_RAISING_CPU_FREQUENCY
-//Dont enable #define DEF_RAISING_CPU_VOLTAGE
+
+#if defined(BSP_USING_PMIC)
+    //#define DEF_RAISING_CPU_FREQUENCY_1GHZ
+    #define DEF_RAISING_CPU_VOLTAGE
+#endif
 
 void machine_shutdown(void)
 {
@@ -99,38 +103,23 @@ void nu_sys_check_register(S_NU_REG *psNuReg)
     }
 }
 
-static int nu_tempsen_init()
+int nu_tempsen_get_value(double *pfTemperture)
 {
+    rt_tick_t begin_tick = rt_tick_get();
+
     SYS->TSENSRFCR &= ~SYS_TSENSRFCR_PD_Msk; // Disable power down, don't wait, takes double conv time (350ms * 2)
-    return 0;
-}
-
-static int nu_tempsen_get_value()
-{
-    char sztmp[32];
-    double temp;
-    static rt_tick_t _old_tick = 0;
-    static int32_t count = 0;
-
-    _old_tick = rt_tick_get();
 
     // Wait valid bit set
     while ((SYS->TSENSRFCR & SYS_TSENSRFCR_DATAVALID_Msk) == 0)
     {
         // 700 ms after clear pd bit. other conversion takes 350 ms
-        if (rt_tick_get() > (500 + _old_tick))
+        if (rt_tick_get() > (500 + begin_tick))
         {
             return -1;
         }
     }
 
-    if (++count == 8)
-    {
-        count = 0;
-        temp = (double)((SYS->TSENSRFCR & 0x0FFF0000) >> 16) * 274.3531 / 4096.0 - 93.3332;
-        snprintf(sztmp, sizeof(sztmp), "Temperature: %.1f\n", temp);
-        LOG_I("%s", sztmp);
-    }
+    *pfTemperture = (double)((SYS->TSENSRFCR & 0x0FFF0000) >> 16) * 274.3531 / 4096.0 - 93.3332;
 
     // Clear Valid bit
     SYS->TSENSRFCR = SYS_TSENSRFCR_DATAVALID_Msk;
@@ -140,7 +129,19 @@ static int nu_tempsen_get_value()
 
 void nu_tempsen_hook(void)
 {
-    nu_tempsen_get_value();
+    static rt_tick_t last_tick = 0;
+
+    if ((last_tick + 5000) < rt_tick_get())
+    {
+        double temp;
+        if (nu_tempsen_get_value(&temp) == 0)
+        {
+            char sztmp[32];
+            snprintf(sztmp, sizeof(sztmp), "Temperature: %.1f\n", temp);
+            LOG_I("%s", sztmp);
+            last_tick = rt_tick_get();
+        }
+    }
 }
 
 static int nu_tempsen_go(void)
@@ -152,8 +153,6 @@ static int nu_tempsen_go(void)
         LOG_E("set %s idle hook failed!\n", __func__);
         return -1;
     }
-
-    nu_tempsen_init();
 
     return 0;
 }
@@ -169,6 +168,25 @@ uint32_t nu_chipcfg_ddrsize(void)
     return ((u32ChipCfg & 0xF0000) != 0) ? (1 << ((u32ChipCfg & 0xF0000) >> 16)) << 20 : 0;
 }
 
+static const char *szBootFromTypeName [] =
+{
+    "QSPI0_NOR",
+    "QSPI0_NAND",
+    "SD_eMMC0",
+    "SD_eMMC1",
+    "RAW_NAND",
+    "USBD",
+    "USBH0",
+    "USBH1",
+    "Invalid"
+};
+
+#define BOOTFROMTYPE_SIZE    (sizeof(szBootFromTypeName)/sizeof(char*))
+void nu_sys_dump(void)
+{
+    LOG_I("Boot from: %s", szBootFromTypeName[nu_get_bootfrom_source()]);
+}
+
 void nu_chipcfg_dump(void)
 {
     uint32_t u32ChipCfg = *((vu32 *)REG_SYS_CHIPCFG);
@@ -178,6 +196,8 @@ void nu_chipcfg_dump(void)
     LOG_I("CHIPCFG: 0x%08x ", u32ChipCfg);
     LOG_I("DDR SDRAM Size: %d MB", u32ChipCfg_DDRSize);
     LOG_I("MCP DDR TYPE: %s", u32ChipCfg_DDRSize ? (u32ChipCfg_DDRType ? "DDR2" : "DDR3/3L") : "Unknown");
+
+    nu_sys_dump();
 }
 
 void nu_clock_dump(void)
@@ -203,6 +223,7 @@ void nu_clock_dump(void)
     LOG_I("PCLK3: %d Hz", CLK_GetPCLK3Freq());
     LOG_I("PCLK4: %d Hz", CLK_GetPCLK4Freq());
 }
+
 
 static const char *szClockName [] =
 {
@@ -255,18 +276,17 @@ void nu_clock_raise(void)
         return;
     }
 
-    CLK_SetPLLFreq(VPLL, PLL_OPMODE_INTEGER, u32PllRefClk, 102000000ul);
     CLK_SetPLLFreq(APLL, PLL_OPMODE_INTEGER, u32PllRefClk, 144000000ul);
     CLK_SetPLLFreq(EPLL, PLL_OPMODE_INTEGER, u32PllRefClk, 500000000ul);
 
     /* Waiting clock ready */
-    CLK_WaitClockReady(CLK_STATUS_VPLLSTB_Msk | CLK_STATUS_APLLSTB_Msk | CLK_STATUS_EPLLSTB_Msk);
+    CLK_WaitClockReady(CLK_STATUS_APLLSTB_Msk | CLK_STATUS_EPLLSTB_Msk);
 
 #if defined(DEF_RAISING_CPU_FREQUENCY)
     /* Switch clock source of CA35 to DDRPLL before raising CA-PLL */
     CLK->CLKSEL0 = (CLK->CLKSEL0 & (~CLK_CLKSEL0_CA35CKSEL_Msk)) | CLK_CLKSEL0_CA35CKSEL_DDRPLL;
-#if defined(DEF_RAISING_CPU_VOLTAGE)
-    if (ma35d1_set_cpu_voltage(CLK_GetPLLClockFreq(SYSPLL), 0x68))
+#if defined(DEF_RAISING_CPU_VOLTAGE) && defined(DEF_RAISING_CPU_FREQUENCY_1GHZ)
+    if (ma35d1_set_cpu_voltage(CLK_GetPLLClockFreq(SYSPLL), 0x64))  //1.30v
     {
         CLK_SetPLLFreq(CAPLL, PLL_OPMODE_INTEGER, u32PllRefClk, 1000000000ul);
     }
@@ -274,7 +294,7 @@ void nu_clock_raise(void)
 #endif
     {
 #if defined(DEF_RAISING_CPU_VOLTAGE)
-        ma35d1_set_cpu_voltage(CLK_GetPLLClockFreq(SYSPLL), 0x5F);
+        ma35d1_set_cpu_voltage(CLK_GetPLLClockFreq(SYSPLL), 0x60);  //1.26v
 #endif
         CLK_SetPLLFreq(CAPLL, PLL_OPMODE_INTEGER, u32PllRefClk, 800000000ul);
     }
@@ -294,6 +314,91 @@ void nu_clock_raise(void)
     MSH_CMD_EXPORT(nu_clock_isready, Check PLL clocks);
 #endif
 
+E_POR_BOOTSRC nu_get_bootfrom_source(void)
+{
+    /* check power-on-setting */
+    //  SYS_PWRONOTP.BTSRCSEL[11:10] or SYS_PWRONPIN.BTSRCSEL[3:2]
+    //    00 = Boot from SPI Flash (Default).
+    //    01 = Boot from SD/eMMC.
+    //    10 = Boot from NAND Flash.
+    //    11 = Boot from USB.
+
+    // If BTSRCSEL = 00, the Boot from SPI Flash.
+    //  SYS_PWRONOTP.MISCCFG[15:14] or SYS_PWRONPIN.MISCCFG[7:6]
+    //    00 = SPI-NAND Flash with 1-bit mode booting (Default).
+    //    10 = SPI-NOR Flash with 1-bit mode booting.
+
+    uint32_t u32PWRON = (uint32_t)SYS->PWRONOTP;
+    uint32_t u32BTSRCSEL, u32MISCCFG, u32NPAGESEL;
+    E_POR_BOOTSRC ret;
+
+    if ((u32PWRON & SYS_PWRONOTP_PWRONSRC_Msk) == SYS_PWRONOTP_PWRONSRC_Msk) // Using SYS_PWRONOTP
+    {
+        u32BTSRCSEL = (u32PWRON & SYS_PWRONOTP_BTSRCSEL_Msk) >> SYS_PWRONOTP_BTSRCSEL_Pos ;
+        u32MISCCFG = (u32PWRON & SYS_PWRONOTP_MISCCFG_Msk) >> SYS_PWRONOTP_MISCCFG_Pos;
+        u32NPAGESEL = (u32PWRON & SYS_PWRONOTP_NPAGESEL_Msk) >> SYS_PWRONOTP_NPAGESEL_Pos;
+    }
+    else
+    {
+        // Using SYS_PWRONPIN
+        u32BTSRCSEL = (SYS->PWRONPIN & SYS_PWRONPIN_BTSRCSEL_Msk) >> SYS_PWRONPIN_BTSRCSEL_Pos ;
+        u32MISCCFG = (SYS->PWRONPIN & SYS_PWRONPIN_MISCCFG_Msk) >> SYS_PWRONPIN_MISCCFG_Pos;
+        u32NPAGESEL = (u32PWRON & SYS_PWRONPIN_NPAGESEL_Msk) >> SYS_PWRONPIN_NPAGESEL_Pos;
+    }
+
+    switch (u32BTSRCSEL)
+    {
+    case 0: // Boot from SPI Flash (Default).
+        if (u32MISCCFG & 0x2)
+        {
+            ret = evBootFrom_QSPI0_NOR;
+        }
+        else
+        {
+            ret = evBootFrom_QSPI0_NAND;
+        }
+        break;
+
+    case 1: // Boot from SD/eMMC.
+        if (u32MISCCFG & 0x1)
+        {
+            ret = evBootFrom_SD_eMMC1;
+        }
+        else
+        {
+            ret = evBootFrom_SD_eMMC0;
+        }
+
+        break;
+
+    case 2: // Boot from NAND Flash.
+        ret = evBootFrom_RAW_NAND;
+        break;
+
+    case 3: // Boot from USB.
+        if (u32NPAGESEL & 0x1)
+        {
+            if (u32NPAGESEL & 0x2)
+            {
+                ret = evBootFrom_USBH1;
+            }
+            else
+            {
+                ret = evBootFrom_USBH0;
+            }
+        }
+        else
+        {
+            ret = evBootFrom_USBD;
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    return ret;
+}
 
 void devmem(int argc, char *argv[])
 {

@@ -16,13 +16,14 @@ if os.getenv('RTT_ROOT'):
 if  CROSS_TOOL == 'gcc':
 	PLATFORM = 'gcc'
 	EXEC_PATH = r'C:\Program Files (x86)\GNU Tools ARM Embedded\6 2017-q1-update\bin'
+
 if os.getenv('RTT_EXEC_PATH'):
 	EXEC_PATH = os.getenv('RTT_EXEC_PATH')
 
 #BUILD = 'debug'
 BUILD = ''
 MAP_FILE = 'rtthread_ma35d1.map'
-LINK_FILE = 'linking_scripts/aarch32'
+LINK_FILE = 'linking_scripts/aarch32.ld'
 TARGET_NAME = 'rtthread.bin'
 
 #------- GCC settings ----------------------------------------------------------
@@ -40,12 +41,11 @@ if PLATFORM == 'gcc':
     OBJCPY = PREFIX + 'objcopy'
     STRIP = PREFIX + 'strip'
 
-    DEVICE = ' -march=armv8-a -mfpu=neon-vfpv4 -ftree-vectorize -ffast-math -mfloat-abi=softfp'
-#    DEVICE = ' -march=armv7-a -mfpu=vfpv3-d16 -ftree-vectorize -ffast-math -mfloat-abi=softfp'
-    CFLAGS = DEVICE + ' -Wall -fno-zero-initialized-in-bss '
-    AFLAGS = ' -c' + DEVICE + ' -x assembler-with-cpp -D__ASSEMBLY__'
-    LFLAGS = DEVICE + ' -nostartfiles  -Wl,--gc-sections,-cref,-Map=' + MAP_FILE + ',-cref,-u,system_vectors' + ' -T ' + LINK_FILE + '.ld'
-    CXXFLAGS = '  -march=armv8-a -mfpu=neon-vfpv4 -std=c++11 '
+    DEVICE = ' -march=armv8-a -mfpu=neon-vfpv4 -ftree-vectorize -ffast-math -mfloat-abi=softfp -funwind-tables -fno-strict-aliasing -mno-unaligned-access '
+    CFLAGS = DEVICE + ' -Wall -fno-zero-initialized-in-bss -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable '
+    AFLAGS = ' -c' + DEVICE + ' -x assembler-with-cpp -D__ASSEMBLY__ -I.'
+    LFLAGS = DEVICE + ' -nostartfiles  -Wl,--gc-sections,-cref,-Map=' + MAP_FILE + ',-cref,-u,system_vectors' + ' -T ' + LINK_FILE
+    CXXFLAGS = DEVICE + ' -std=c++11 '
 
     M_CFLAGS = CFLAGS + ' -mlong-calls -fPIC '
     M_CXXFLAGS = CXXFLAGS + ' -mlong-calls -fPIC'
@@ -58,14 +58,14 @@ if PLATFORM == 'gcc':
     LPATH = ''
 
     if BUILD == 'debug':
-        CFLAGS += ' -O0 -gdwarf-2 -g'
+        CFLAGS += ' -O0 -gdwarf-2 -g '
         AFLAGS += ' -gdwarf-2'
     else:
-        CFLAGS += ' -O2'
+        CFLAGS += ' -O2 -g '
 
-    CXXFLAGS = CFLAGS 
+    CXXFLAGS = CFLAGS
 
-    POST_ACTION = OBJCPY + ' -O binary $TARGET ' + TARGET_NAME + '\n' 
+    POST_ACTION = OBJCPY + ' -O binary $TARGET ' + TARGET_NAME + '\n'
     POST_ACTION += SIZE + ' $TARGET\n'
 
 

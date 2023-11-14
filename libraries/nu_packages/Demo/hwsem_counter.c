@@ -20,7 +20,7 @@
 #define DEF_COUNTER_ADDR_RTP  (3*1024*1024)
 #define DEF_COUNTER_ADDR_A35  ((0x80000000+DEF_COUNTER_ADDR_RTP)|UNCACHEABLE)
 
-#if defined(USE_MA35D1_SUBM)
+#if defined(USE_MA35_RTP)
     #define DEF_COUNTER_ADDR   DEF_COUNTER_ADDR_RTP
 #else
     #define DEF_COUNTER_ADDR   DEF_COUNTER_ADDR_A35
@@ -86,7 +86,7 @@ static int hwsem_counter_app(void)
 
     return 0;
 }
-INIT_APP_EXPORT(hwsem_counter_app);
+//INIT_APP_EXPORT(hwsem_counter_app);
 MSH_CMD_EXPORT(hwsem_counter_app, demo hwsem);
 
 #endif /* #if defined(BSP_USING_HWSEM)*/

@@ -84,12 +84,12 @@ You can run windows batch script to download rtthread.bin into memory, then run 
 
 For 512MB DD3L downloading:
 ```bash
-<path-to-rtthread>\bsp\nuvoton\numaker-iot-ma35d1\nuwriter_scripts\nuwriter_ddr3_512mb_download_and_run.bat
+<path-to-rtthread>\bsp\nuvoton\numaker-iot-ma35d1\nuwriter_scripts\nuwriter_ddr_download_and_run.bat
 ```
 
 For 128MB DD2 downloading:
 ```bash
-<path-to-rtthread>\bsp\nuvoton\numaker-iot-ma35d1\nuwriter_scripts\nuwriter_ddr2_128mb_download_and_run.bat
+<path-to-rtthread>\bsp\nuvoton\numaker-iot-ma35d1\nuwriter_scripts\nuwriter_ddr_128mb_download_and_run.bat
 ```
 
 ### **Burn to Serial NAND**

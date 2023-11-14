@@ -12,7 +12,7 @@
 
 #include <rtthread.h>
 
-#if defined(USE_MA35D1_AARCH32)
+#if defined(USE_MA35_AARCH32)
 
 #include <rthw.h>
 #include <stdio.h>
@@ -45,9 +45,10 @@ MMU TLB setting:
 */
 struct mem_desc platform_mem_desc[] =
 {
-    {0x00000000,   0x7FFFFFFF, 0x00000000, DEVICE_MEM},          // Peripherals
-    {0x80000000,   DDR_LIMIT_SIZE - 1, 0x80000000, NORMAL_MEM},  // 1GB DDR, cacheable
-    {0xC0000000,   0xFFFFFFFF, 0x80000000, NORMAL_MEM_UNCACHED}  // 1GB DDR, non-cacheable
+    {0x00000000,   0x7FFFFFFF, 0x00000000, DEVICE_MEM},             // Peripherals
+    {0x80000000,   BOARD_SDRAM_START - 1, 0x80000000, DEVICE_MEM},  // 8MB DDR, non-cacheable
+    {BOARD_SDRAM_START,   DDR_LIMIT_SIZE - 1, BOARD_SDRAM_START, NORMAL_MEM},  // 1GB-8MB DDR, cacheable
+    {0xC0000000,   0xFFFFFFFF, 0x80000000, NORMAL_MEM_UNCACHED}     // 1GB DDR, non-cacheable
 };
 const rt_uint32_t platform_mem_desc_size = sizeof(platform_mem_desc) / sizeof(platform_mem_desc[0]);
 
@@ -133,6 +134,8 @@ RT_WEAK void rt_hw_board_init(void)
     /* Unlock protected registers */
     SYS_UnlockReg();
 
+#if !defined(USE_SECONDARY_CORE_AS_PRIMARY)
+
     /* initialize SSPCC */
     nu_sspcc_init();
 
@@ -141,6 +144,8 @@ RT_WEAK void rt_hw_board_init(void)
 
     /* initialize UMCTL2 */
     nu_umctl2_init();
+
+#endif
 
     /* initialize base clock */
     nu_clock_init();
@@ -172,7 +177,9 @@ RT_WEAK void rt_hw_board_init(void)
     rt_console_set_device(RT_CONSOLE_DEVICE_NAME);
 #endif
 
+#if !defined(USE_SECONDARY_CORE_AS_PRIMARY)
     nu_clock_raise();
+#endif
 
     /* initialize systick */
     rt_hw_systick_init();
@@ -254,4 +261,4 @@ void rt_hw_secondary_cpu_idle_exec(void)
 
 #endif
 
-#endif /* #if defined(USE_MA35D1_AARCH32) */
+#endif /* #if defined(USE_MA35_AARCH32) */

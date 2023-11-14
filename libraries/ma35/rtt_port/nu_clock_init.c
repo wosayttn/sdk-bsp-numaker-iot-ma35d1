@@ -32,23 +32,23 @@ static void nu_clock_uart_init(void)
 #endif
 #if defined(BSP_USING_UART4)
     CLK_EnableModuleClock(UART4_MODULE);
-    CLK_SetModuleClock(UART4_MODULE, CLK_CLKSEL2_UART4SEL_HXT, CLK_CLKDIV1_UART4(1));
+    CLK_SetModuleClock(UART4_MODULE, CLK_CLKSEL2_UART4SEL_HXT, CLK_CLKDIV2_UART4(1));
 #endif
 #if defined(BSP_USING_UART5)
     CLK_EnableModuleClock(UART5_MODULE);
-    CLK_SetModuleClock(UART5_MODULE, CLK_CLKSEL2_UART5SEL_HXT, CLK_CLKDIV1_UART5(1));
+    CLK_SetModuleClock(UART5_MODULE, CLK_CLKSEL2_UART5SEL_HXT, CLK_CLKDIV2_UART5(1));
 #endif
 #if defined(BSP_USING_UART6)
     CLK_EnableModuleClock(UART6_MODULE);
-    CLK_SetModuleClock(UART6_MODULE, CLK_CLKSEL2_UART6SEL_HXT, CLK_CLKDIV1_UART6(1));
+    CLK_SetModuleClock(UART6_MODULE, CLK_CLKSEL2_UART6SEL_HXT, CLK_CLKDIV2_UART6(1));
 #endif
 #if defined(BSP_USING_UART7)
     CLK_EnableModuleClock(UART7_MODULE);
-    CLK_SetModuleClock(UART7_MODULE, CLK_CLKSEL2_UART7SEL_HXT, CLK_CLKDIV1_UART7(1));
+    CLK_SetModuleClock(UART7_MODULE, CLK_CLKSEL2_UART7SEL_HXT, CLK_CLKDIV2_UART7(1));
 #endif
 #if defined(BSP_USING_UART8)
     CLK_EnableModuleClock(UART8_MODULE);
-    CLK_SetModuleClock(UART8_MODULE, CLK_CLKSEL3_UART8SEL_HXT, CLK_CLKDIV1_UART8(1));
+    CLK_SetModuleClock(UART8_MODULE, CLK_CLKSEL3_UART8SEL_HXT, CLK_CLKDIV2_UART8(1));
 #endif
 #if defined(BSP_USING_UART9)
     CLK_EnableModuleClock(UART9_MODULE);
@@ -306,7 +306,7 @@ void nu_clock_rtc_init(void)
 #endif
 }
 
-#if !defined(USE_MA35D1_SUBM)
+#if !defined(USE_MA35_RTP)
 
 static void nu_clock_usbd_init(void)
 {
@@ -341,8 +341,6 @@ static void nu_clock_disp_init(void)
 #if defined(BSP_USING_DISP)
     CLK_EnableModuleClock(DCU_MODULE);
     CLK_SetModuleClock(DCU_MODULE, CLK_CLKSEL0_DCUSEL_EPLL_DIV2, MODULE_NoMsk);
-
-//    CLK_SetModuleClock(DCUP_MODULE, CLK_CLKSEL0_DCUPSEL_VPLL, MODULE_NoMsk);
 #endif
 }
 
@@ -382,9 +380,17 @@ static void nu_clock_whc_init(void)
 #endif
 }
 
+static void nu_clock_vde_init(void)
+{
+#if defined(BSP_USING_VDE)
+    CLK_EnableModuleClock(VDEC_MODULE);
+#endif
+}
+
+
 void nu_clock_init(void)
 {
-#if !defined(USE_MA35D1_SUBM)
+#if !defined(USE_MA35_RTP)
     nu_clock_base_init();
 
     nu_clock_gmac_init();
@@ -392,6 +398,8 @@ void nu_clock_init(void)
     nu_clock_usbd_init();
     nu_clock_usbh_init();
     nu_clock_disp_init();
+    nu_clock_vde_init();
+
 #endif
 
     nu_clock_whc_init();

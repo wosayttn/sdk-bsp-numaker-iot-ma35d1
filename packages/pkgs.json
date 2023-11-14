@@ -1,10 +1,5 @@
 [
  {
-  "path": "/packages/multimedia/wavplayer", 
-  "ver": "latest", 
-  "name": "WAVPLAYER"
- }, 
- {
   "path": "/packages/system/ramdisk", 
   "ver": "latest", 
   "name": "RAMDISK"
