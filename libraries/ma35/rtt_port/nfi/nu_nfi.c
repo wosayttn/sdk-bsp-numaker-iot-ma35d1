@@ -51,6 +51,20 @@
 #define NAND_PAGE_4KB   4096
 #define NAND_PAGE_8KB   8192
 
+#define NFI_ALIGN_LEN 64
+ALIGN(NFI_ALIGN_LEN)
+static uint8_t g_au8NfiCacheBuf[NAND_PAGE_8KB];
+
+struct nfi_ecc_record
+{
+    uint16_t offset;
+    uint8_t mask;
+};
+
+#define NFI_MAX_ECC_RECORDS 256
+static struct nfi_ecc_record s_ecc_records[NFI_MAX_ECC_RECORDS];
+static int s_ecc_records_cnt = 0;
+
 struct nfi_nand_info
 {
     struct nand_hw_control  controller;
@@ -404,10 +418,15 @@ void fmiSM_CorrectData_BCH(uint8_t ucFieidIndex, uint8_t ucErrorCnt, uint8_t *pD
     //--- correct each error bytes
     for (ii = 0; ii < ucErrorCnt; ii++)
     {
-        // for wrong data in field
+        // for wrong data in field: defer applying correction to avoid modifying cache during DMA
         if (uaAddr[ii] < field_len)
         {
-            *(pDAddr + uaAddr[ii]) ^= uaData[ii];
+            if (s_ecc_records_cnt < NFI_MAX_ECC_RECORDS)
+            {
+                s_ecc_records[s_ecc_records_cnt].offset = (ucFieidIndex - 1) * field_len + uaAddr[ii];
+                s_ecc_records[s_ecc_records_cnt].mask = (uint8_t)uaData[ii];
+                s_ecc_records_cnt++;
+            }
         }
         // for wrong first-3-bytes in redundancy area
         else if (uaAddr[ii] < (field_len + 3))
@@ -496,6 +515,18 @@ int fmiSMCorrectData(struct mtd_info *mtd, unsigned long uDAddr)
 static __inline int _nfi_nand_dma_transfer(struct mtd_info *mtd, const u_char *addr, unsigned int len, int is_write)
 {
     struct nfi_nand_info *nand = nfi_nand;
+    uint8_t *dma_buf = (uint8_t *)addr;
+    int is_unaligned = (((uint32_t)addr & (NFI_ALIGN_LEN - 1)) > 0) ? 1 : 0;
+
+    if (is_unaligned)
+    {
+        RT_ASSERT(len <= NAND_PAGE_8KB);
+        dma_buf = g_au8NfiCacheBuf;
+        if (is_write)
+        {
+            memcpy(dma_buf, addr, len);
+        }
+    }
 
     // For save, wait DMAC to ready
     while (NFI->DMACTL & NFI_DMACTL_DMABUSY_Msk);
@@ -511,11 +542,20 @@ static __inline int _nfi_nand_dma_transfer(struct mtd_info *mtd, const u_char *a
     // Disable Interrupt
     NFI->NANDINTEN &= ~NFI_NANDINTEN_DMAIE_Msk;
 
-    // Flush to memory
-    rt_hw_cpu_dcache_clean_inv((void *)addr, len);
+    // Cache management before DMA start
+    if (is_write)
+    {
+        // Flush CPU cache dirty lines to memory so DMA reads fresh data
+        rt_hw_cpu_dcache_clean((void *)dma_buf, len);
+    }
+    else
+    {
+        // Clean and invalidate so dirty lines won't evict and corrupt DMA transfer
+        rt_hw_cpu_dcache_clean_inv((void *)dma_buf, len);
+    }
 
     // Fill dma_addr
-    NFI->DMASA = (uint32_t)addr;
+    NFI->DMASA = (uint32_t)dma_buf;
 
     // Enable target abort interrupt generation during DMA transfer.
     NFI->DMAINTEN = NFI_NANDINTEN_DMAIE_Msk;
@@ -570,6 +610,9 @@ static __inline int _nfi_nand_dma_transfer(struct mtd_info *mtd, const u_char *a
     }
     else
     {
+        int ecc_failed = 0;
+        s_ecc_records_cnt = 0;
+
         // Blocking for reading
         // Enable DMA Read
 
@@ -580,9 +623,10 @@ static __inline int _nfi_nand_dma_transfer(struct mtd_info *mtd, const u_char *a
             do
             {
                 int stat = 0;
-                if ((stat = fmiSMCorrectData(mtd, (unsigned int)addr)) < 0)
+                if ((stat = fmiSMCorrectData(mtd, (unsigned int)dma_buf)) < 0)
                 {
                     mtd->ecc_stats.failed++;
+                    ecc_failed = 1;
                     NFI->NANDINTSTS = NFI_NANDINTSTS_ECCFLDIF_Msk;
                     NFI->DMACTL = (NFI_DMACTL_DMACEN_Msk | NFI_DMACTL_DMARST_Msk);        // Reset DMAC
                     NFI->NANDCTL |= NFI_NANDCTL_SWRST_Msk;
@@ -590,7 +634,6 @@ static __inline int _nfi_nand_dma_transfer(struct mtd_info *mtd, const u_char *a
                 }
                 else if (stat > 0)
                 {
-                    //mtd->ecc_stats.corrected += stat; //Occure: MLC UBIFS mount error
                     NFI->NANDINTSTS = NFI_NANDINTSTS_ECCFLDIF_Msk;
                 }
 
@@ -598,7 +641,36 @@ static __inline int _nfi_nand_dma_transfer(struct mtd_info *mtd, const u_char *a
             while (!(NFI->NANDINTSTS & NFI_NANDINTSTS_DMAIF_Msk) || (NFI->NANDINTSTS & NFI_NANDINTSTS_ECCFLDIF_Msk));
         }
         else
-            while (!(NFI->NANDINTSTS & NFI_NANDINTSTS_DMAIF_Msk));
+        {
+            while (!(NFI->NANDINTSTS & NFI_NANDINTSTS_DMAIF_Msk))
+                ;
+        }
+
+        if (ecc_failed)
+        {
+            NFI->NANDINTSTS |= NFI_NANDINTSTS_DMAIF_Msk;
+            return -1;
+        }
+
+        // Invalidate D-cache after DMA transfer completes to discard any stale prefetched lines
+        rt_hw_cpu_dcache_invalidate((void *)dma_buf, len);
+
+        // Apply deferred ECC corrections to the freshly invalidated memory buffer
+        if (s_ecc_records_cnt > 0)
+        {
+            int k;
+            for (k = 0; k < s_ecc_records_cnt; k++)
+            {
+                dma_buf[s_ecc_records[k].offset] ^= s_ecc_records[k].mask;
+            }
+            mtd->ecc_stats.corrected += s_ecc_records_cnt;
+        }
+
+        // If unaligned bounce buffer was used, copy data back to destination buffer
+        if (is_unaligned)
+        {
+            memcpy((void *)addr, dma_buf, len);
+        }
     }
 
     // Clear DMA finished flag
